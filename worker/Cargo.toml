@@ -1,0 +1,31 @@
+[package]
+name = "relayforge-worker"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[dependencies]
+aes-gcm = "0.10"
+anyhow = "1"
+axum = "=0.8.9"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+futures-util = "0.3"
+hmac = "0.12"
+httpdate = "1"
+prometheus = "=0.14.0"
+rand = "0.8"
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "http2", "charset", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "signal", "time", "net", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+url = "2"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+
+[dev-dependencies]
+proptest = "1"

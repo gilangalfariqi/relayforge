@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relayforge.example/contracts/event-envelope-v1.json",
+  "title": "RelayForge event envelope v1",
+  "description": "Request body for POST /api/v1/events. Additional envelope properties are forbidden. The data object is tenant-defined and may be further constrained by a tenant event schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "data"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+){1,3}$"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339. Optional; defaults to server now. Must be within configured bounds."
+    },
+    "data": {
+      "type": "object",
+      "minProperties": 0,
+      "description": "Business payload. Must be a JSON object. Signed as part of the raw request body, not this parsed object."
+    }
+  }
+}

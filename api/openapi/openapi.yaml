@@ -1,0 +1,1042 @@
+openapi: 3.1.0
+info:
+  title: RelayForge API
+  version: 0.2.0
+  summary: Multi-tenant webhook delivery control plane.
+  description: |
+    Phase 2 public API. Only endpoints implemented by this binary are described.
+    Delivery execution and replay are implemented in later phases; their routes
+    are intentionally absent. The internal admin listener is not published here.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://{host}
+    description: Deployment-specific API host
+    variables:
+      host:
+        default: api.relayforge.example
+        description: Public API hostname
+security: []
+tags:
+  - name: operations
+    description: Liveness, readiness, build identity, and the contract document.
+  - name: tenants
+    description: Tenant registration and current-tenant settings.
+  - name: credentials
+    description: API key creation, rotation, revocation, and metadata.
+  - name: endpoints
+    description: Webhook destinations and signing secrets.
+  - name: events
+    description: Event ingest and inspection.
+  - name: deliveries
+    description: Delivery state and attempt history.
+  - name: schemas
+    description: Optional tenant JSON Schema validation.
+  - name: audit
+    description: Append-only security-sensitive action history.
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      tags: [operations]
+      security: []
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /readyz:
+    get:
+      operationId: getReadiness
+      tags: [operations]
+      security: []
+      summary: Readiness probe
+      responses:
+        "200":
+          description: Ready to serve traffic.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/meta:
+    get:
+      operationId: getMeta
+      tags: [operations]
+      security: []
+      summary: Build and environment identity
+      responses:
+        "200":
+          description: Service metadata. Contains no secrets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Meta" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenAPIDocument
+      tags: [operations]
+      security: []
+      summary: This OpenAPI document
+      responses:
+        "200":
+          description: OpenAPI 3.1 YAML.
+          content:
+            application/yaml:
+              schema: { type: string }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/tenants:
+    post:
+      operationId: registerTenant
+      tags: [tenants]
+      security: []
+      summary: Register a tenant and first owner key
+      parameters:
+        - name: X-Signup-Token
+          in: header
+          required: false
+          schema: { type: string }
+          description: Required when RELAYFORGE_SIGNUP_MODE=token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 200 }
+                slug:
+                  type: string
+                  pattern: "^[a-z0-9][a-z0-9-]{2,62}$"
+      responses:
+        "201":
+          description: Tenant and one-time API key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignupResponse" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/tenant:
+    get:
+      operationId: getTenant
+      tags: [tenants]
+      security: [{ bearerAuth: [] }]
+      summary: Current tenant
+      responses:
+        "200":
+          description: Current tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateTenant
+      tags: [tenants]
+      security: [{ bearerAuth: [] }]
+      summary: Update the tenant display name (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200":
+          description: Updated tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials:
+    get:
+      operationId: listCredentials
+      tags: [credentials]
+      security: [{ bearerAuth: [] }]
+      summary: List credential metadata (owner)
+      responses:
+        "200":
+          description: Credential metadata. No secrets or digests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Credential" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCredential
+      tags: [credentials]
+      security: [{ bearerAuth: [] }]
+      summary: Create a credential (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, role]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                role: { type: string, enum: [owner, admin, ingest, viewer] }
+                expires_in_days: { type: integer, minimum: 1, maximum: 365 }
+      responses:
+        "201":
+          description: New credential including the one-time API key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewCredential" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials/{id}/rotate:
+    post:
+      operationId: rotateCredential
+      tags: [credentials]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Rotate a credential with an overlap window (owner)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                overlap_seconds: { type: integer, minimum: 0, maximum: 86400, default: 3600 }
+      responses:
+        "201":
+          description: New credential and old revocation time.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewCredential" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/credentials/{id}:
+    delete:
+      operationId: revokeCredential
+      tags: [credentials]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Revoke a credential immediately (owner)
+      responses:
+        "204": { description: Revoked or already revoked. }
+        "409": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/endpoints:
+    get:
+      operationId: listEndpoints
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      summary: List non-deleted endpoints
+      responses:
+        "200":
+          description: Endpoint list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Endpoint" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createEndpoint
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      summary: Create an endpoint and first signing secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EndpointInput" }
+      responses:
+        "201":
+          description: Endpoint and one-time signing secret.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewEndpoint" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/endpoints/{id}:
+    get:
+      operationId: getEndpoint
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Endpoint detail (never includes secrets)
+      responses:
+        "200":
+          description: Endpoint.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Endpoint" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateEndpoint
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Update URL, filters, policy, or active/paused status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EndpointUpdate" }
+      responses:
+        "200":
+          description: Updated endpoint.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Endpoint" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteEndpoint
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Soft-delete an endpoint
+      responses:
+        "204": { description: Deleted. }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/endpoints/{id}/secrets:
+    get:
+      operationId: listEndpointSecrets
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: List signing secret metadata
+      responses:
+        "200":
+          description: Metadata only.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SecretMeta" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createEndpointSecret
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Create a signing secret (maximum two active)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                overlap_seconds: { type: integer, minimum: 0, maximum: 604800, default: 86400 }
+      responses:
+        "201":
+          description: New secret returned once.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewSecret" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/endpoints/{id}/secrets/{secret_id}:
+    delete:
+      operationId: retireEndpointSecret
+      tags: [endpoints]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: secret_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      summary: Retire a signing secret
+      responses:
+        "204": { description: Retired or already retired. }
+        "409": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/events:
+    post:
+      operationId: createEvent
+      tags: [events]
+      security: [{ bearerAuth: [] }]
+      summary: Ingest an event (idempotency required)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 255
+            pattern: "^[A-Za-z0-9_.:-]+$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventEnvelope" }
+      responses:
+        "201":
+          description: Event accepted or stored response replayed.
+          headers:
+            Idempotency-Replayed:
+              schema: { type: string, const: "true" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResult" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "415": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    get:
+      operationId: listEvents
+      tags: [events]
+      security: [{ bearerAuth: [] }]
+      summary: List events with filters and cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, has_more, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/EventSummary" }
+                  next_cursor: { type: [string, "null"] }
+                  has_more: { type: boolean }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/events/{id}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Event detail with delivery summary
+      responses:
+        "200":
+          description: Event detail. wire_body is not returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventDetail" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/events/{id}/replay:
+    post:
+      operationId: replayEvent
+      tags: [events]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      summary: Replay failed or dead-lettered deliveries for an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                endpoint_ids:
+                  type: array
+                  maxItems: 50
+                  items: { type: string, format: uuid }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "202":
+          description: Eligible deliveries queued in a new replay cycle.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReplayResponse" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/deliveries:
+    get:
+      operationId: listDeliveries
+      tags: [deliveries]
+      security: [{ bearerAuth: [] }]
+      summary: List deliveries with filters and cursor pagination
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: endpoint_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: event_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Delivery page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, has_more, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Delivery" }
+                  next_cursor: { type: [string, "null"] }
+                  has_more: { type: boolean }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/deliveries/{id}:
+    get:
+      operationId: getDelivery
+      tags: [deliveries]
+      security: [{ bearerAuth: [] }]
+      summary: Get one delivery
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Delivery.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Delivery" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/deliveries/{id}/attempts:
+    get:
+      operationId: listDeliveryAttempts
+      tags: [deliveries]
+      security: [{ bearerAuth: [] }]
+      summary: List append-only delivery attempts
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Append-only attempt page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, has_more, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Attempt" }
+                  next_cursor: { type: [string, "null"] }
+                  has_more: { type: boolean }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/schemas:
+    get:
+      operationId: listEventSchemas
+      tags: [schemas]
+      security: [{ bearerAuth: [] }]
+      summary: List registered event schemas
+      responses:
+        "200":
+          description: Tenant schemas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/EventSchema" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createEventSchema
+      tags: [schemas]
+      security: [{ bearerAuth: [] }]
+      summary: Register a JSON Schema for an event type/version (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [event_type, version, schema]
+              properties:
+                event_type: { type: string }
+                version: { type: integer, minimum: 1 }
+                schema: { type: object }
+      responses:
+        "201":
+          description: Schema registered.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventSchema" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/schemas/{id}:
+    delete:
+      operationId: deleteEventSchema
+      tags: [schemas]
+      security: [{ bearerAuth: [] }]
+      summary: Delete a registered event schema
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204": { description: Deleted. }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+  /api/v1/audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      security: [{ bearerAuth: [] }]
+      summary: List append-only audit entries
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: resource_type
+          in: query
+          schema: { type: string }
+        - name: resource_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Audit page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, has_more, next_cursor]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEntry" }
+                  next_cursor: { type: [string, "null"] }
+                  has_more: { type: boolean }
+        "4XX": { $ref: "#/components/responses/Problem" }
+        "5XX": { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: rf_live_<key_id>_<secret>
+      description: API key. Query-string and cookie credentials are not accepted.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    From:
+      name: from
+      in: query
+      schema: { type: string, format: date-time }
+    To:
+      name: to
+      in: query
+      schema: { type: string, format: date-time }
+  responses:
+    Problem:
+      description: RFC 9457 problem document with a stable code.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, ready] }
+        checks:
+          type: object
+          additionalProperties: { type: string }
+        version: { type: string }
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [service, version, commit, environment, time]
+      properties:
+        service: { type: string, const: relayforge-api }
+        version: { type: string }
+        commit: { type: string }
+        environment: { type: string, enum: [development, test, staging, production] }
+        time: { type: string, format: date-time }
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        code: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
+        reason: { type: string }
+        instance: { type: string }
+        request_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [pointer, code, detail]
+            properties:
+              pointer: { type: string }
+              code: { type: string }
+              detail: { type: string }
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [id, slug, name, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [active, suspended] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        suspended_at: { type: [string, "null"], format: date-time }
+    SignupResponse:
+      type: object
+      additionalProperties: false
+      required: [tenant, api_key, api_key_id, warning]
+      properties:
+        tenant: { $ref: "#/components/schemas/Tenant" }
+        api_key: { type: string }
+        api_key_id: { type: string, format: uuid }
+        warning: { type: string }
+    Credential:
+      type: object
+      required: [id, key_id, name, role, created_at, last_used_at, expires_at, revoked_at, rotated_from]
+      properties:
+        id: { type: string, format: uuid }
+        key_id: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [owner, admin, ingest, viewer] }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        rotated_from: { type: [string, "null"], format: uuid }
+    NewCredential:
+      allOf:
+        - $ref: "#/components/schemas/Credential"
+        - type: object
+          required: [api_key]
+          properties:
+            api_key: { type: string }
+    EndpointInput:
+      type: object
+      additionalProperties: false
+      required: [name, url]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        url: { type: string, maxLength: 2048 }
+        event_types:
+          type: array
+          maxItems: 20
+          items: { type: string }
+        max_attempts: { type: integer, minimum: 1, maximum: 20 }
+        initial_backoff_ms: { type: integer, minimum: 100, maximum: 3600000 }
+        max_backoff_ms: { type: integer, minimum: 100, maximum: 86400000 }
+        retry_window_seconds: { type: integer, minimum: 60, maximum: 604800 }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 30000 }
+        rate_limit_per_sec: { type: integer, minimum: 1, maximum: 100 }
+    EndpointUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        url: { type: string, maxLength: 2048 }
+        status: { type: string, enum: [active, paused] }
+        event_types:
+          type: array
+          maxItems: 20
+          items: { type: string }
+        max_attempts: { type: integer, minimum: 1, maximum: 20 }
+        initial_backoff_ms: { type: integer, minimum: 100, maximum: 3600000 }
+        max_backoff_ms: { type: integer, minimum: 100, maximum: 86400000 }
+        retry_window_seconds: { type: integer, minimum: 60, maximum: 604800 }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 30000 }
+        rate_limit_per_sec: { type: integer, minimum: 1, maximum: 100 }
+    Endpoint:
+      type: object
+      required:
+        [name, url, id, status, consecutive_failures, created_at, updated_at]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        url: { type: string, maxLength: 2048 }
+        event_types:
+          type: array
+          maxItems: 20
+          items: { type: string }
+        max_attempts: { type: integer, minimum: 1, maximum: 20 }
+        initial_backoff_ms: { type: integer, minimum: 100, maximum: 3600000 }
+        max_backoff_ms: { type: integer, minimum: 100, maximum: 86400000 }
+        retry_window_seconds: { type: integer, minimum: 60, maximum: 604800 }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 30000 }
+        rate_limit_per_sec: { type: integer, minimum: 1, maximum: 100 }
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, paused, disabled] }
+        consecutive_failures: { type: integer }
+        disabled_at: { type: [string, "null"], format: date-time }
+        disabled_reason: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: [string, "null"], format: date-time }
+    NewEndpoint:
+      allOf:
+        - $ref: "#/components/schemas/Endpoint"
+        - type: object
+          required: [signing_secret, signing_secret_id]
+          properties:
+            signing_secret: { type: string }
+            signing_secret_id: { type: string, format: uuid }
+    SecretMeta:
+      type: object
+      required: [id, secret_hint, status, created_at, expires_at, retired_at]
+      properties:
+        id: { type: string, format: uuid }
+        secret_hint: { type: string }
+        status: { type: string, enum: [active, retired] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        retired_at: { type: [string, "null"], format: date-time }
+    NewSecret:
+      allOf:
+        - $ref: "#/components/schemas/SecretMeta"
+        - type: object
+          required: [signing_secret]
+          properties:
+            signing_secret: { type: string }
+    EventEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, data]
+      properties:
+        type: { type: string, minLength: 3, maxLength: 100 }
+        schema_version: { type: integer, minimum: 1, default: 1 }
+        occurred_at: { type: string, format: date-time }
+        data: { type: object }
+    EventResult:
+      type: object
+      additionalProperties: false
+      required: [id, type, schema_version, status, occurred_at, received_at, delivery_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        schema_version: { type: integer }
+        status: { type: string, enum: [accepted, no_subscribers] }
+        occurred_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        delivery_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    EventSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [id, type, schema_version, status, occurred_at, received_at, delivery_count,
+         delivered_count, failed_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        schema_version: { type: integer }
+        status: { type: string }
+        occurred_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        delivery_count: { type: integer }
+        delivered_count: { type: integer }
+        failed_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    DeliverySummary:
+      type: object
+      additionalProperties: false
+      required: [id, endpoint_id, endpoint_name, endpoint_url, status, attempt_count, next_attempt_at, completed_at]
+      properties:
+        id: { type: string, format: uuid }
+        endpoint_id: { type: string, format: uuid }
+        endpoint_name: { type: string }
+        endpoint_url: { type: string }
+        status: { type: string }
+        attempt_count: { type: integer }
+        next_attempt_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+    EventDetail:
+      allOf:
+        - $ref: "#/components/schemas/EventSummary"
+        - type: object
+          required: [payload, payload_sha256, deliveries]
+          properties:
+            payload: {}
+            payload_sha256: { type: string }
+            deliveries:
+              type: array
+              items: { $ref: "#/components/schemas/DeliverySummary" }
+    Delivery:
+      type: object
+      additionalProperties: false
+      required:
+        [id, event_id, endpoint_id, cycle, status, attempt_count, max_attempts,
+         next_attempt_at, last_error_code, last_error_detail, last_http_status,
+         created_at, completed_at, dead_lettered_at]
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        endpoint_id: { type: string, format: uuid }
+        cycle: { type: integer }
+        status: { type: string }
+        attempt_count: { type: integer }
+        max_attempts: { type: integer }
+        next_attempt_at: { type: string, format: date-time }
+        last_error_code: { type: [string, "null"] }
+        last_error_detail: { type: [string, "null"] }
+        last_http_status: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        dead_lettered_at: { type: [string, "null"], format: date-time }
+    Attempt:
+      type: object
+      additionalProperties: false
+      required: [attempt_no, cycle, started_at, finished_at, outcome, http_status, error_code, error_detail, duration_ms]
+      properties:
+        attempt_no: { type: integer }
+        cycle: { type: integer }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        outcome: { type: [string, "null"] }
+        http_status: { type: [integer, "null"] }
+        error_code: { type: [string, "null"] }
+        error_detail: { type: [string, "null"] }
+        duration_ms: { type: [integer, "null"] }
+    EventSchema:
+      type: object
+      additionalProperties: false
+      required: [id, event_type, version, schema, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        event_type: { type: string }
+        version: { type: integer }
+        schema: { type: object }
+        created_at: { type: string, format: date-time }
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, actor_type, actor_id, action, resource_type, resource_id, request_id, ip, metadata, created_at]
+      properties:
+        id: { type: integer }
+        actor_type: { type: string, enum: [api_key, admin_token, system] }
+        actor_id: { type: string }
+        action: { type: string }
+        resource_type: { type: string }
+        resource_id: { type: [string, "null"], format: uuid }
+        request_id: { type: [string, "null"] }
+        ip: { type: [string, "null"] }
+        metadata: {}
+        created_at: { type: string, format: date-time }
+    ReplayDeliveryResult:
+      type: object
+      additionalProperties: false
+      required: [delivery_id, endpoint_id, previous_cycle, status]
+      properties:
+        delivery_id: { type: string, format: uuid }
+        endpoint_id: { type: string, format: uuid }
+        previous_cycle: { type: integer, minimum: 1 }
+        cycle: { type: integer, minimum: 2 }
+        status: { type: string, enum: [replayed, skipped] }
+        reason: { type: string }
+    ReplayResponse:
+      type: object
+      additionalProperties: false
+      required: [event_id, replayed, skipped, results]
+      properties:
+        event_id: { type: string, format: uuid }
+        replayed: { type: integer, minimum: 1 }
+        skipped: { type: integer, minimum: 0 }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/ReplayDeliveryResult" }

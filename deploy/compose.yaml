@@ -1,0 +1,127 @@
+name: relayforge
+
+x-database-url: &database-url
+  RELAYFORGE_DATABASE_URL: postgres://relayforge:relayforge_local_only@postgres:5432/relayforge?sslmode=disable
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: relayforge
+      POSTGRES_USER: relayforge
+      POSTGRES_PASSWORD: relayforge_local_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relayforge -d relayforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../api
+      target: api
+    entrypoint: ["/migrate"]
+    command: ["-path", "/migrations", "up"]
+    environment:
+      <<: *database-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../api
+      target: api
+      args:
+        VERSION: 0.2.0
+    environment:
+      <<: *database-url
+      RELAYFORGE_ENV: development
+      RELAYFORGE_HTTP_ADDR: ":8080"
+      RELAYFORGE_ADMIN_ADDR: ":9090"
+      RELAYFORGE_LOG_LEVEL: info
+      RELAYFORGE_EXPECTED_SCHEMA_VERSION: "5"
+      # Deliberately low-entropy local placeholders, not credentials. Any
+      # shared or production deployment must inject random values from a
+      # secret manager; startup rejects short values.
+      RELAYFORGE_API_KEY_PEPPER: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      RELAYFORGE_KEK: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      RELAYFORGE_KEK_VERSION: "1"
+      RELAYFORGE_KEY_ENV: live
+      RELAYFORGE_SIGNUP_MODE: open
+      RELAYFORGE_MAX_EVENT_BYTES: "262144"
+      RELAYFORGE_ENDPOINT_LIMIT: "50"
+      RELAYFORGE_IDEMPOTENCY_TTL: "24h"
+      RELAYFORGE_EVENT_FUTURE_SKEW: "5m"
+      RELAYFORGE_EVENT_PAST_WINDOW: "720h"
+      RELAYFORGE_ALLOW_INSECURE_LOCAL_DELIVERY: "true"
+    ports:
+      - "8080:8080"
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/api", "healthcheck", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../worker
+    environment:
+      <<: *database-url
+      RELAYFORGE_WORKER_HEALTH_ADDR: "0.0.0.0:9090"
+      RELAYFORGE_WORKER_CONCURRENCY: "8"
+      RELAYFORGE_WORKER_POLL_INTERVAL_MS: "250"
+      RELAYFORGE_WORKER_CLAIM_BATCH: "16"
+      RELAYFORGE_WORKER_LEASE_SECONDS: "90"
+      RELAYFORGE_WORKER_REAP_INTERVAL_SECONDS: "15"
+      RELAYFORGE_WORKER_REAP_BATCH: "100"
+      RELAYFORGE_EXPECTED_SCHEMA_VERSION: "5"
+      RELAYFORGE_SHUTDOWN_TIMEOUT_SECONDS: "15"
+      RELAYFORGE_KEK: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+      RELAYFORGE_ALLOW_INSECURE_LOCAL_DELIVERY: "true"
+      RELAYFORGE_LOG_LEVEL: info
+    ports:
+      - "127.0.0.1:9091:9090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/worker", "healthcheck", "127.0.0.1:9090"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  receiver:
+    build:
+      context: ../api
+      target: receiver
+    environment:
+      <<: *database-url
+      RELAYFORGE_RECEIVER_ADDR: ":8090"
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/receiver", "healthcheck", "http://127.0.0.1:8090/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

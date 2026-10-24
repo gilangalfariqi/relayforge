@@ -1,0 +1,63 @@
+groups:
+  - name: relayforge.operations
+    interval: 15s
+    rules:
+      - alert: RelayForgeQueueOldestAgeHigh
+        expr: relayforge_queue_oldest_due_age_seconds > 60
+        for: 2m
+        labels:
+          severity: critical
+          service: relayforge-worker
+        annotations:
+          summary: "RelayForge oldest due delivery age exceeds 60s"
+          description: "Oldest due delivery has been waiting {{ $value | printf \"%.1f\" }}s. See docs/09-incident-recovery.md §2."
+
+      - alert: RelayForgeDatabaseDown
+        expr: relayforge_db_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: relayforge
+        annotations:
+          summary: "RelayForge database readiness check failing"
+          description: "PostgreSQL readiness check is failing on {{ $labels.instance }}. See docs/09-incident-recovery.md §5."
+
+      - alert: RelayForgeWorkerNotReady
+        expr: relayforge_worker_ready == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: relayforge-worker
+        annotations:
+          summary: "RelayForge worker not ready"
+          description: "Worker {{ $labels.instance }} is alive (/healthz) but failing /readyz. See docs/09-incident-recovery.md §7."
+
+      - alert: RelayForgeIngestLatencyHigh
+        expr: histogram_quantile(0.99, sum(rate(relayforge_http_request_duration_seconds_bucket{route="/api/v1/events",method="POST"}[5m])) by (le)) > 0.75
+        for: 5m
+        labels:
+          severity: warning
+          service: relayforge-api
+        annotations:
+          summary: "RelayForge event ingest p99 latency > 750ms"
+          description: "Event ingest p99 latency is {{ $value | printf \"%.3f\" }}s over 5m."
+
+      - alert: RelayForgeSSRFBlockSpike
+        expr: rate(relayforge_ssrf_blocked_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: relayforge-worker
+        annotations:
+          summary: "RelayForge connect-time SSRF block rate elevated"
+          description: "Worker is blocking connect-time SSRF destinations ({{ $labels.reason }}). Investigate tenant endpoints."
+
+      - alert: RelayForgeDeadLetterRateElevated
+        expr: rate(relayforge_deliveries_dead_lettered_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: relayforge-worker
+        annotations:
+          summary: "RelayForge deliveries entering dead_lettered state"
+          description: "Deliveries are exhausting retry policies ({{ $labels.reason }}). See docs/09-incident-recovery.md §3."

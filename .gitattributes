@@ -1,0 +1,19 @@
+# Normalise every text file to LF in the repository. Windows checkouts keep
+# working because Go, Rust, YAML, SQL, and shell tolerate LF everywhere.
+* text=auto eol=lf
+
+*.go   text eol=lf
+*.rs   text eol=lf
+*.sql  text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.zip  binary

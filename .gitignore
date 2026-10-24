@@ -1,0 +1,33 @@
+# Build output
+/bin/
+/api/api
+/api/migrate
+/worker/target/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and local evidence
+*.log
+/rust-check.log
+/rust-check.done
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Test and coverage output
+coverage.out
+coverage.html
+*.test
+*.prof
+
+# Docker / database local state
+/pgdata/

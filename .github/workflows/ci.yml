@@ -1,0 +1,181 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go control plane
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Static analysis
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
+      - name: Vulnerability scan (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  rust:
+    name: Rust worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: 1.99.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: worker
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --all --locked
+
+  migrations:
+    name: PostgreSQL and integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: relayforge
+          POSTGRES_USER: relayforge
+          POSTGRES_PASSWORD: relayforge_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U relayforge -d relayforge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      RELAYFORGE_DATABASE_URL: postgres://relayforge:relayforge_ci_only@localhost:5432/relayforge?sslmode=disable
+      RELAYFORGE_TEST_DATABASE_URL: postgres://relayforge:relayforge_ci_only@localhost:5432/relayforge?sslmode=disable
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: worker
+      - name: Apply migrations
+        run: go run ./cmd/migrate -path migrations up
+      - name: Report version
+        run: go run ./cmd/migrate -path migrations version
+      - name: Roll back all migrations
+        run: go run ./cmd/migrate -path migrations down
+      - name: Re-apply migrations
+        run: go run ./cmd/migrate -path migrations up
+      - name: PostgreSQL-backed Go integration tests
+        run: go test -tags=integration -p 1 -count=1 ./internal/httpapi ./internal/store
+      - name: PostgreSQL-backed Rust worker integration tests
+        working-directory: worker
+        run: cargo test --test delivery_integration --locked -- --nocapture
+
+  docker:
+    name: Container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [go, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate Compose file
+        run: docker compose -f deploy/compose.yaml config --quiet
+      - name: Build API image
+        run: docker build --target api --build-arg VERSION=ci --build-arg COMMIT="${GITHUB_SHA}" -t relayforge-api:ci ./api
+      - name: Build receiver image
+        run: docker build --target receiver -t relayforge-receiver:ci ./api
+      - name: Build worker image
+        run: docker build --target worker -t relayforge-worker:ci ./worker
+
+  e2e:
+    name: End-to-end delivery
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [docker]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Start PostgreSQL, API, worker, receiver and migrate
+        run: docker compose -f deploy/compose.yaml up -d --build
+      - name: Wait for services
+        run: |
+          for _ in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/readyz >/dev/null \
+              && curl -fsS http://127.0.0.1:9091/readyz >/dev/null \
+              && curl -fsS http://127.0.0.1:8090/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f deploy/compose.yaml ps
+          docker compose -f deploy/compose.yaml logs --no-color
+          exit 1
+      - name: Live ingest, retry, failure, dead-letter and replay
+        working-directory: api
+        env:
+          RELAYFORGE_E2E_API_URL: http://127.0.0.1:8080
+          RELAYFORGE_E2E_RECEIVER_URL: http://127.0.0.1:8090
+        run: go test -tags=e2e -run '^TestEndToEndDeliveryLifecycle$' -count=1 -v ./internal/httpapi
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --no-color
+      - name: Stop stack
+        if: always()
+        run: docker compose -f deploy/compose.yaml down -v
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

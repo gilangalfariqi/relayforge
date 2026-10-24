@@ -1,0 +1,74 @@
+{
+  "run_id": "optimized-worker-20261023-125853",
+  "label": "optimized-worker",
+  "started_at": "2026-10-23T12:58:53.9922273Z",
+  "completed_at": "2026-10-23T12:59:27.0978973Z",
+  "preload_rows": {
+    "deliveries": 1942334,
+    "delivery_attempts": 1990862,
+    "events": 971334,
+    "idempotency_records": 26134,
+    "rate_limit_counters": 375
+  },
+  "scenarios": [
+    {
+      "id": "S2",
+      "name": "Steady-State End-to-End (10 ev/s, 2 Endpoints: 1 Healthy + 1 Transient 503 Retry)",
+      "duration_seconds": 20.03,
+      "total_requests": 200,
+      "error_count": 0,
+      "error_rate_pct": 0,
+      "throughput_rps": 9.98,
+      "latency": {
+        "count": 200,
+        "min_ms": 22.38,
+        "p50_ms": 31.44,
+        "p95_ms": 80.62,
+        "p99_ms": 121.41,
+        "max_ms": 131.88,
+        "avg_ms": 38.85
+      },
+      "queue_wait": {
+        "count": 400,
+        "min_ms": 11.49,
+        "p50_ms": 143.02,
+        "p95_ms": 262.44,
+        "p99_ms": 266.02,
+        "max_ms": 271.17,
+        "avg_ms": 140.57
+      },
+      "drain_seconds": 0.32,
+      "extra": {
+        "delivered_count": 400,
+        "delivery_success_rate_pct": 100,
+        "fast_endpoint_id": "01a168d7-c6f8-7d28-9b32-1b33dfed47e6",
+        "flaky_endpoint_id": "01a168d7-c719-72f0-b8bd-9725c9b76fe2",
+        "total_attempts_executed": 440,
+        "total_deliveries": 400
+      }
+    },
+    {
+      "id": "S3",
+      "name": "Burst Load (50 ev/s -\u003e 1,000 Deliveries) + Backlog Drain",
+      "duration_seconds": 10.11,
+      "total_requests": 500,
+      "error_count": 0,
+      "error_rate_pct": 0,
+      "throughput_rps": 49.47,
+      "latency": {
+        "count": 500,
+        "min_ms": 24.94,
+        "p50_ms": 276.45,
+        "p95_ms": 1231.24,
+        "p99_ms": 1325.36,
+        "max_ms": 1390.07,
+        "avg_ms": 514.33
+      },
+      "drain_seconds": 2.32,
+      "extra": {
+        "delivered_count": 1000,
+        "total_deliveries": 1000
+      }
+    }
+  ]
+}

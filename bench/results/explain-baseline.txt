@@ -1,0 +1,261 @@
+﻿Pager usage is off.
+=== Q1: Claim due deliveries (deliveries_claim_idx) [docs/07-benchmark-plan.md ??9] ===
+BEGIN
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.28..69.78 rows=20 width=30) (actual time=10.799..12.621 rows=20.00 loops=1)
+   Buffers: shared hit=58 read=4 dirtied=2
+   ->  LockRows  (cost=0.28..2547.65 rows=733 width=30) (actual time=10.796..12.613 rows=20.00 loops=1)
+         Buffers: shared hit=58 read=4 dirtied=2
+         ->  Index Scan using deliveries_claim_idx on deliveries  (cost=0.28..2540.32 rows=733 width=30) (actual time=5.723..7.280 rows=20.00 loops=1)
+               Index Cond: (next_attempt_at <= now())
+               Filter: (status = ANY ('{pending,retry_scheduled}'::text[]))
+               Index Searches: 1
+               Buffers: shared hit=18 read=4
+ Planning:
+   Buffers: shared hit=279 read=11
+ Planning Time: 42.023 ms
+ Execution Time: 14.294 ms
+(13 rows)
+
+ROLLBACK
+=== Q2: Reap expired leases (deliveries_lease_idx) [docs/02-data-model.md ??4] ===
+BEGIN
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.15..8.18 rows=1 width=115) (actual time=2.248..6.815 rows=100.00 loops=1)
+   Buffers: shared hit=200 read=5 dirtied=4
+   ->  LockRows  (cost=0.15..8.18 rows=1 width=115) (actual time=2.246..6.790 rows=100.00 loops=1)
+         Buffers: shared hit=200 read=5 dirtied=4
+         ->  Index Scan using deliveries_lease_idx on deliveries  (cost=0.15..8.17 rows=1 width=115) (actual time=1.578..4.993 rows=100.00 loops=1)
+               Index Cond: (lease_expires_at < now())
+               Filter: (status = 'in_progress'::text)
+               Index Searches: 1
+               Buffers: shared read=5
+ Planning:
+   Buffers: shared hit=32 read=1
+ Planning Time: 3.120 ms
+ Execution Time: 6.940 ms
+(13 rows)
+
+ROLLBACK
+=== Q3: List tenant events with cursor (events_tenant_created_idx) [docs/07-benchmark-plan.md ??9] ===
+                                                                                           QUERY PLAN                                                                                           
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.64..6.75 rows=25 width=50) (actual time=18.693..18.706 rows=25.00 loops=1)
+   Buffers: shared hit=10 read=6
+   ->  Incremental Sort  (cost=0.64..105623.84 rows=431990 width=50) (actual time=18.690..18.696 rows=25.00 loops=1)
+         Sort Key: created_at DESC, id DESC
+         Presorted Key: created_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+         Buffers: shared hit=10 read=6
+         ->  Index Scan Backward using events_retention_idx on events  (cost=0.43..86184.29 rows=431990 width=50) (actual time=6.870..12.796 rows=26.00 loops=1)
+               Index Cond: (created_at <= (now() - '5 days'::interval))
+               Filter: ((tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (ROW(created_at, id) < ROW((now() - '5 days'::interval), '019a0100-0000-7000-8000-0000000d0000'::uuid)))
+               Rows Removed by Filter: 26
+               Index Searches: 1
+               Buffers: shared hit=1 read=6
+ Planning:
+   Buffers: shared hit=116
+ Planning Time: 5.923 ms
+ Execution Time: 19.632 ms
+(17 rows)
+
+=== Q4a: List tenant events by type (populated type: payment.succeeded, 250k rows) [docs/02-data-model.md ??4] ===
+                                                                                                              QUERY PLAN                                                                                                               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1.26..22.81 rows=25 width=50) (actual time=2.424..2.433 rows=25.00 loops=1)
+   Buffers: shared hit=7 read=3
+   ->  Incremental Sort  (cost=1.26..93207.36 rows=108098 width=50) (actual time=2.422..2.426 rows=25.00 loops=1)
+         Sort Key: created_at DESC, id DESC
+         Presorted Key: created_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+         Buffers: shared hit=7 read=3
+         ->  Index Scan Backward using events_retention_idx on events  (cost=0.43..88342.94 rows=108098 width=50) (actual time=0.070..2.314 rows=26.00 loops=1)
+               Index Cond: (created_at <= (now() - '5 days'::interval))
+               Filter: ((tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (type = 'payment.succeeded'::text) AND (ROW(created_at, id) < ROW((now() - '5 days'::interval), '019a0100-0000-7000-8000-0000000d0000'::uuid)))
+               Rows Removed by Filter: 78
+               Index Searches: 1
+               Buffers: shared hit=7 read=3
+ Planning Time: 0.294 ms
+ Execution Time: 2.566 ms
+(15 rows)
+
+=== Q4b: List tenant events by type (sparse/zero-row type for tenant 1: order.created) ===
+                                                                                                            QUERY PLAN                                                                                                             
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1.26..22.94 rows=25 width=50) (actual time=26389.050..26389.052 rows=0.00 loops=1)
+   Buffers: shared hit=10 read=53173 written=96
+   ->  Incremental Sort  (cost=1.26..93178.20 rows=107450 width=50) (actual time=26389.048..26389.050 rows=0.00 loops=1)
+         Sort Key: created_at DESC, id DESC
+         Presorted Key: created_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+         Buffers: shared hit=10 read=53173 written=96
+         ->  Index Scan Backward using events_retention_idx on events  (cost=0.43..88342.94 rows=107450 width=50) (actual time=26388.989..26388.990 rows=0.00 loops=1)
+               Index Cond: (created_at <= (now() - '5 days'::interval))
+               Filter: ((tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (type = 'order.created'::text) AND (ROW(created_at, id) < ROW((now() - '5 days'::interval), '019a0100-0000-7000-8000-0000000d0000'::uuid)))
+               Rows Removed by Filter: 863928
+               Index Searches: 1
+               Buffers: shared hit=10 read=53173 written=96
+ Planning Time: 0.289 ms
+ Execution Time: 26389.337 ms
+(15 rows)
+
+=== Q5: List dead-lettered deliveries for tenant (deliveries_tenant_status_created_idx) [docs/07-benchmark-plan.md ??9] ===
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.55..78.94 rows=25 width=46) (actual time=3.192..3.193 rows=0.00 loops=1)
+   Buffers: shared read=4
+   ->  Index Scan using deliveries_tenant_status_created_idx on deliveries  (cost=0.55..77343.01 rows=24667 width=46) (actual time=3.189..3.190 rows=0.00 loops=1)
+         Index Cond: ((tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (status = 'dead_lettered'::text))
+         Index Searches: 1
+         Buffers: shared read=4
+ Planning:
+   Buffers: shared read=3
+ Planning Time: 1.209 ms
+ Execution Time: 3.265 ms
+(10 rows)
+
+=== Q6a: Event detail + deliveries (deliveries_event_idx) [docs/02-data-model.md ??4] ===
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=11.47..11.47 rows=1 width=70) (actual time=2.828..2.830 rows=2.00 loops=1)
+   Sort Key: created_at DESC, id DESC
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared read=5
+   ->  Index Scan using deliveries_event_idx on deliveries  (cost=0.43..11.46 rows=1 width=70) (actual time=1.950..2.166 rows=2.00 loops=1)
+         Index Cond: (event_id = '019a0100-0000-7000-8000-00000007a121'::uuid)
+         Filter: (tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid)
+         Index Searches: 1
+         Buffers: shared read=5
+ Planning Time: 0.263 ms
+ Execution Time: 3.111 ms
+(11 rows)
+
+=== Q6b: Event status projection count (deliveries_event_idx) [worker/src/store.rs project_event_status_tx] ===
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=11.49..11.50 rows=1 width=32) (actual time=0.227..0.228 rows=1.00 loops=1)
+   Buffers: shared hit=5
+   ->  Index Scan using deliveries_event_idx on deliveries  (cost=0.43..11.45 rows=2 width=10) (actual time=0.068..0.071 rows=2.00 loops=1)
+         Index Cond: (event_id = '019a0100-0000-7000-8000-00000007a121'::uuid)
+         Index Searches: 1
+         Buffers: shared hit=5
+ Planning:
+   Buffers: shared hit=2 read=4
+ Planning Time: 2.738 ms
+ Execution Time: 1.048 ms
+(10 rows)
+
+=== Q7: Delivery attempt history (delivery_attempts_delivery_idx) [docs/02-data-model.md ??4] ===
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=8.46..8.50 rows=2 width=86) (actual time=2.105..2.107 rows=1.00 loops=1)
+   Buffers: shared hit=3 read=4
+   ->  Incremental Sort  (cost=8.46..8.50 rows=2 width=86) (actual time=2.103..2.104 rows=1.00 loops=1)
+         Sort Key: started_at DESC, id DESC
+         Presorted Key: started_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+         Buffers: shared hit=3 read=4
+         ->  Index Scan using delivery_attempts_delivery_idx on delivery_attempts  (cost=0.43..8.45 rows=1 width=86) (actual time=2.023..2.027 rows=1.00 loops=1)
+               Index Cond: (delivery_id = '019a0200-0000-7000-8000-000000000029'::uuid)
+               Filter: (tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid)
+               Index Searches: 1
+               Buffers: shared read=4
+ Planning:
+   Buffers: shared hit=122 read=20
+ Planning Time: 13.881 ms
+ Execution Time: 2.186 ms
+(16 rows)
+
+=== Q8: Auth lookup by key_id (api_credentials_key_id_key) [docs/02-data-model.md ??4] ===
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Hash Join  (cost=1.26..2.40 rows=1 width=107) (actual time=12.446..12.527 rows=1.00 loops=1)
+   Hash Cond: (t.id = c.tenant_id)
+   Buffers: shared hit=1 read=1
+   ->  Seq Scan on tenants t  (cost=0.00..1.10 rows=10 width=23) (actual time=0.015..0.017 rows=10.00 loops=1)
+         Buffers: shared hit=1
+   ->  Hash  (cost=1.25..1.25 rows=1 width=100) (actual time=12.336..12.337 rows=1.00 loops=1)
+         Buckets: 1024  Batches: 1  Memory Usage: 9kB
+         Buffers: shared read=1
+         ->  Seq Scan on api_credentials c  (cost=0.00..1.25 rows=1 width=100) (actual time=12.280..12.284 rows=1.00 loops=1)
+               Filter: (key_id = 'benchkey0001'::text)
+               Rows Removed by Filter: 19
+               Buffers: shared read=1
+ Planning:
+   Buffers: shared hit=101 read=19
+ Planning Time: 12.469 ms
+ Execution Time: 13.554 ms
+(16 rows)
+
+=== Q9: Active secrets for delivery (endpoint_secrets_active_idx) [docs/02-data-model.md ??4] ===
+                                                                           QUERY PLAN                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=1.81..1.81 rows=1 width=106) (actual time=0.700..0.701 rows=1.00 loops=1)
+   Sort Key: created_at DESC, id DESC
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared read=1
+   ->  Seq Scan on endpoint_secrets  (cost=0.00..1.80 rows=1 width=106) (actual time=0.659..0.671 rows=1.00 loops=1)
+         Filter: ((endpoint_id = '019a0000-0001-7000-8000-000000000001'::uuid) AND (status = 'active'::text) AND ((expires_at IS NULL) OR (expires_at > now())))
+         Rows Removed by Filter: 39
+         Buffers: shared read=1
+ Planning:
+   Buffers: shared hit=66 read=4
+ Planning Time: 4.624 ms
+ Execution Time: 0.776 ms
+(12 rows)
+
+=== Q10: Fan-out endpoint lookup (endpoints_fanout_idx) [docs/02-data-model.md ??4] ===
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on endpoints  (cost=0.00..1.30 rows=2 width=87) (actual time=1.114..1.125 rows=2.00 loops=1)
+   Filter: ((deleted_at IS NULL) AND (tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (status = 'active'::text))
+   Rows Removed by Filter: 18
+   Buffers: shared read=1
+ Planning:
+   Buffers: shared hit=112 read=7
+ Planning Time: 4.456 ms
+ Execution Time: 1.154 ms
+(8 rows)
+
+=== Q11: Idempotency replay lookup (idempotency_records_pkey) [docs/02-data-model.md ??4] ===
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idempotency_records_pkey on idempotency_records  (cost=0.41..8.44 rows=1 width=150) (actual time=1.410..1.414 rows=1.00 loops=1)
+   Index Cond: ((tenant_id = '019a0000-0000-7000-8000-000000000001'::uuid) AND (scope = 'POST:/api/v1/events'::text) AND (key = 'idem-preload-00030000'::text))
+   Index Searches: 1
+   Buffers: shared read=4
+ Planning:
+   Buffers: shared hit=50 read=5
+ Planning Time: 3.684 ms
+ Execution Time: 2.787 ms
+(8 rows)
+
+=== Q12: Retention delete batch on events (events_retention_idx) [docs/02-data-model.md ??4] ===
+BEGIN
+                                                                           QUERY PLAN                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.86..10466.80 rows=5000 width=36) (actual time=1.744..123.279 rows=5000.00 loops=1)
+   Buffers: shared hit=35023 read=288 dirtied=295
+   ->  LockRows  (cost=0.86..313357.36 rows=149703 width=36) (actual time=1.742..122.204 rows=5000.00 loops=1)
+         Buffers: shared hit=35023 read=288 dirtied=295
+         ->  Nested Loop Anti Join  (cost=0.86..311860.33 rows=149703 width=36) (actual time=0.825..103.493 rows=5000.00 loops=1)
+               Buffers: shared hit=25023 read=288
+               ->  Index Scan using events_retention_idx on events e  (cost=0.43..13087.44 rows=149829 width=30) (actual time=0.407..5.202 rows=5000.00 loops=1)
+                     Index Cond: (created_at <= (now() - '30 days'::interval))
+                     Index Searches: 1
+                     Buffers: shared hit=309 read=2
+               ->  Index Scan using deliveries_event_idx on deliveries d  (cost=0.43..1.99 rows=1 width=22) (actual time=0.019..0.019 rows=0.00 loops=5000)
+                     Index Cond: (event_id = e.id)
+                     Filter: (status = ANY ('{pending,in_progress,retry_scheduled}'::text[]))
+                     Rows Removed by Filter: 2
+                     Index Searches: 5000
+                     Buffers: shared hit=24714 read=286
+ Planning:
+   Buffers: shared hit=51 read=17
+ Planning Time: 7.976 ms
+ Execution Time: 124.283 ms
+(20 rows)
+
+ROLLBACK

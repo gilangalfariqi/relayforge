@@ -1,0 +1,47 @@
+================================================================================
+  RelayForge End-to-End Live Walkthrough (make demo)
+================================================================================
+
+[1/7] Verifying Go API & Rust Worker Readiness
+  API    /readyz -> status=ready version=0.2.0
+  Worker /readyz -> status=ready version=0.1.0
+
+[2/7] Creating Demo Tenant & API Key
+  Tenant: 01a168de-9172-7f53-88ef-9303893d0108 (slug=demo-acme-60779)
+  API key: <redacted> (shown once)
+
+[3/7] Registering Webhook Endpoint & Configuring Receiver Secret
+  Endpoint 01a168de-9195-7d10-a652-778c56251f44 registered (secret <redacted>, shown once)
+
+[4/7] Ingest + Transient Failure -> Automatic Retry -> Delivery
+  POST #1 -> 201 id=01a168de-91cf-7c97-be85-3f5fae238332 (replayed="")
+  POST #2 same key -> 201 id=01a168de-91cf-7c97-be85-3f5fae238332 Idempotency-Replayed="true"
+  event 01a168de-91cf-7c97-be85-3f5fae238332: delivery 01a168de-91d6-760a-b5d2-33dedc81241f status=delivered attempt_count=2 (event status=delivered)
+  Attempt history for Event 1 (503 then 200) (delivery=01a168de-91d6-760a-b5d2-33dedc81241f):
+    cycle=1 attempt_no=2 outcome=success           http_status=200 duration_ms=6
+    cycle=1 attempt_no=1 outcome=retryable_failure http_status=503 duration_ms=6
+
+[5/7] Destination Outage -> Retries Exhausted -> Dead-Letter
+  event 01a168de-9548-7495-b675-d365edf5f6a8: delivery 01a168de-954b-77a6-9276-f2416b5bd8d1 status=dead_lettered attempt_count=3 (event status=failed)
+  Attempt history for Event 2 (3x 503) (delivery=01a168de-954b-77a6-9276-f2416b5bd8d1):
+    cycle=1 attempt_no=3 outcome=retryable_failure http_status=503 duration_ms=1
+    cycle=1 attempt_no=2 outcome=retryable_failure http_status=503 duration_ms=1
+    cycle=1 attempt_no=1 outcome=retryable_failure http_status=503 duration_ms=1
+
+[6/7] Destination Recovers -> Authorised Replay (POST /events/:id/replay)
+  replayed=1 skipped=0
+  event 01a168de-9548-7495-b675-d365edf5f6a8: delivery 01a168de-954b-77a6-9276-f2416b5bd8d1 status=delivered attempt_count=1 (event status=delivered)
+  Attempt history for Event 2 after replay (cycle 1 history preserved + cycle 2) (delivery=01a168de-954b-77a6-9276-f2416b5bd8d1):
+    cycle=2 attempt_no=1 outcome=success           http_status=200 duration_ms=4
+    cycle=1 attempt_no=3 outcome=retryable_failure http_status=503 duration_ms=1
+    cycle=1 attempt_no=2 outcome=retryable_failure http_status=503 duration_ms=1
+    cycle=1 attempt_no=1 outcome=retryable_failure http_status=503 duration_ms=1
+
+[7/7] Audit Trail & Receiver Statistics
+  audit action=event.replay       resource=delivery actor=01a168de-9174-7623-ade6-f7f94abf27a9
+  audit action=endpoint.create    resource=endpoint actor=01a168de-9174-7623-ade6-f7f94abf27a9
+  audit action=tenant.create      resource=tenant actor=signup
+  receiver: effects_applied=2 duplicates_ignored=0 auth_failures=0 total_attempts=6
+================================================================================
+  Complete: ingest -> retry -> delivery -> dead-letter -> replay verified
+================================================================================

@@ -1,0 +1,113 @@
+{
+  "title": "RelayForge Control Plane & Delivery Engine",
+  "uid": "relayforge-v1-ops",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Event Ingest Rate & Status (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(relayforge_http_requests_total{route=\"/api/v1/events\",method=\"POST\"}[1m]))",
+          "legendFormat": "HTTP {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Event Ingest Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(relayforge_http_request_duration_seconds_bucket{route=\"/api/v1/events\",method=\"POST\"}[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(relayforge_http_request_duration_seconds_bucket{route=\"/api/v1/events\",method=\"POST\"}[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(relayforge_http_request_duration_seconds_bucket{route=\"/api/v1/events\",method=\"POST\"}[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Queue Depth & Oldest Due Age (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "relayforge_queue_due_deliveries",
+          "legendFormat": "Due deliveries"
+        },
+        {
+          "expr": "relayforge_queue_oldest_due_age_seconds",
+          "legendFormat": "Oldest due age (s)"
+        },
+        {
+          "expr": "relayforge_worker_in_flight_deliveries",
+          "legendFormat": "In-flight deliveries"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Delivery Attempt Outcomes (attempts/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (outcome, error_code) (rate(relayforge_delivery_attempts_total[1m]))",
+          "legendFormat": "{{outcome}} ({{error_code}})"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Rate Limit Denials & Deferrals",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (scope) (rate(relayforge_rate_limit_denied_total[1m]))",
+          "legendFormat": "API denied ({{scope}})"
+        },
+        {
+          "expr": "rate(relayforge_rate_limit_deferred_total[1m])",
+          "legendFormat": "Worker destination deferred"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Security Signals (SSRF Blocks, Lease Reaps, Retention Deletes)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(relayforge_ssrf_blocked_total[5m]))",
+          "legendFormat": "SSRF blocked ({{reason}})"
+        },
+        {
+          "expr": "rate(relayforge_leases_reaped_total[5m])",
+          "legendFormat": "Expired leases reaped"
+        },
+        {
+          "expr": "sum by (table) (rate(relayforge_retention_deleted_rows_total[5m]))",
+          "legendFormat": "Retention deleted ({{table}})"
+        }
+      ]
+    }
+  ]
+}

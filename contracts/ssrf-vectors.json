@@ -1,0 +1,410 @@
+{
+  "policy_version": 1,
+  "updated": "2026-10-22",
+  "notes": "Shared conformance vectors for Go registration validation and Rust connect-time enforcement. resolved_ips is supplied by a test resolver; empty means the host is an IP literal or resolution is expected to fail.",
+  "vectors": [
+    {
+      "id": "allow-public-https",
+      "input": "https://example.com/hooks/orders",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "allow",
+      "reason": "ok"
+    },
+    {
+      "id": "allow-public-https-explicit-port",
+      "input": "https://example.com:443/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "allow",
+      "reason": "ok"
+    },
+    {
+      "id": "allow-public-ip-literal",
+      "input": "https://93.184.216.34/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "allow",
+      "reason": "ok"
+    },
+    {
+      "id": "allow-public-ipv6",
+      "input": "https://[2606:4700:4700::1111]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "allow",
+      "reason": "ok"
+    },
+    {
+      "id": "deny-http-scheme",
+      "input": "http://example.com/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "scheme_not_https"
+    },
+    {
+      "id": "deny-userinfo",
+      "input": "https://user:pass@example.com/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "userinfo_present"
+    },
+    {
+      "id": "deny-fragment",
+      "input": "https://example.com/hook#fragment",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "fragment_present"
+    },
+    {
+      "id": "deny-single-label-host",
+      "input": "https://metadata/hook",
+      "stage": "registration",
+      "resolved_ips": ["169.254.169.254"],
+      "expected": "deny",
+      "reason": "host_not_fqdn"
+    },
+    {
+      "id": "deny-trailing-dot",
+      "input": "https://example.com./hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "trailing_dot"
+    },
+    {
+      "id": "deny-local-suffix",
+      "input": "https://printer.local/hook",
+      "stage": "registration",
+      "resolved_ips": ["192.168.1.50"],
+      "expected": "deny",
+      "reason": "denied_suffix"
+    },
+    {
+      "id": "deny-internal-suffix",
+      "input": "https://billing.internal/hook",
+      "stage": "registration",
+      "resolved_ips": ["10.0.0.12"],
+      "expected": "deny",
+      "reason": "denied_suffix"
+    },
+    {
+      "id": "deny-port-not-allowlisted",
+      "input": "https://example.com:8443/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "port_not_allowed"
+    },
+    {
+      "id": "deny-ipv4-loopback",
+      "input": "https://127.0.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-loopback-shorthand",
+      "input": "https://127.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-decimal",
+      "input": "https://2130706433/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-hex",
+      "input": "https://0x7f000001/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-octal",
+      "input": "https://0177.0.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-private-10",
+      "input": "https://10.1.2.3/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-private-172",
+      "input": "https://172.20.0.5/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv4-private-192",
+      "input": "https://192.168.0.10/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-cloud-metadata",
+      "input": "https://169.254.169.254/latest/meta-data/",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-cgnat",
+      "input": "https://100.64.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-documentation-range",
+      "input": "https://192.0.2.10/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-benchmark-range",
+      "input": "https://198.18.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-multicast",
+      "input": "https://224.0.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-reserved",
+      "input": "https://240.0.0.1/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-unspecified-ipv4",
+      "input": "https://0.0.0.0/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-broadcast",
+      "input": "https://255.255.255.255/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-loopback",
+      "input": "https://[::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-unspecified",
+      "input": "https://[::]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-mapped-loopback",
+      "input": "https://[::ffff:127.0.0.1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-mapped-public",
+      "input": "https://[::ffff:93.184.216.34]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-nat64-loopback",
+      "input": "https://[64:ff9b::7f00:1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-6to4-loopback",
+      "input": "https://[2002:7f00:1::]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-teredo",
+      "input": "https://[2001::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-ula",
+      "input": "https://[fc00::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-link-local",
+      "input": "https://[fe80::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-multicast",
+      "input": "https://[ff02::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-documentation",
+      "input": "https://[2001:db8::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-ipv6-orchid",
+      "input": "https://[2001:20::1]/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-dns-split-public-private",
+      "input": "https://rebind.example.com/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34", "127.0.0.1"],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-dns-split-public-metadata",
+      "input": "https://rebind2.example.com/hook",
+      "stage": "delivery",
+      "resolved_ips": ["93.184.216.34", "169.254.169.254"],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "deny-dns-private-only",
+      "input": "https://internal.example.com/hook",
+      "stage": "delivery",
+      "resolved_ips": ["10.0.0.5"],
+      "expected": "deny",
+      "reason": "ip_denied"
+    },
+    {
+      "id": "allow-dns-public-only",
+      "input": "https://hooks.example.com/hook",
+      "stage": "delivery",
+      "resolved_ips": ["93.184.216.34", "93.184.216.35"],
+      "expected": "allow",
+      "reason": "ok"
+    },
+    {
+      "id": "deny-dns-no-addresses",
+      "input": "https://empty.example.com/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "expected": "deny",
+      "reason": "no_addresses"
+    },
+    {
+      "id": "deny-dns-failure-registration",
+      "input": "https://nonexistent.example.com/hook",
+      "stage": "registration",
+      "resolved_ips": [],
+      "resolution": "error",
+      "expected": "deny",
+      "reason": "dns_error"
+    },
+    {
+      "id": "allow-dns-failure-delivery-is-retryable-not-blocked",
+      "input": "https://temporarily-down.example.com/hook",
+      "stage": "delivery",
+      "resolved_ips": [],
+      "resolution": "error",
+      "expected": "retry",
+      "reason": "dns_error_retryable",
+      "note": "Delivery must classify this as a retryable dns_error, not destination_blocked. The destination is not proven hostile."
+    },
+    {
+      "id": "deny-parser-ambiguity-backslash",
+      "input": "https://example.com\\@evil.com/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "ambiguous_authority"
+    },
+    {
+      "id": "deny-parser-ambiguity-at",
+      "input": "https://example.com@evil.com/hook",
+      "stage": "registration",
+      "resolved_ips": ["93.184.216.34"],
+      "expected": "deny",
+      "reason": "userinfo_present"
+    },
+    {
+      "id": "deny-metadata-hostname",
+      "input": "https://metadata.google.internal/computeMetadata/v1/",
+      "stage": "registration",
+      "resolved_ips": ["169.254.169.254"],
+      "expected": "deny",
+      "reason": "denied_suffix"
+    }
+  ]
+}
