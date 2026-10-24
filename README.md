@@ -150,8 +150,10 @@ intend to delete the local database volume.
   fmt/clippy/tests, migration up/down/up, PostgreSQL-backed Go and Rust integration tests, image builds, a
   live Compose end-to-end delivery test, and a full-history gitleaks scan.
 - `.github/workflows/publish.yml` publishes `linux/amd64` API, worker, and receiver images to GHCR after the
-  `ci` workflow succeeds on `main`, and directly from `v*` tags. Tags include the branch or semantic
-  version, `sha-<commit>`, and `latest` on `main`. Builds attach SBOM and provenance attestations.
+  `ci` workflow succeeds on `main`. A `v*` tag publishes only if every required CI check on the tagged
+  commit is green; the workflow reads the check runs and fails otherwise. Tags include the branch or
+  semantic version, `sha-<commit>`, and `latest` for `main` builds only, so releasing an older commit never
+  moves `latest`. Builds attach SBOM and provenance attestations.
 - `.github/dependabot.yml` opens grouped weekly updates for Go, Cargo, GitHub Actions, Dockerfiles, and
   Compose images.
 - `main` is protected: force pushes and deletions are blocked, and the six CI jobs (`Go control plane`,

@@ -252,9 +252,11 @@ skipped in the run summary and is never reported as passed.
 | End-to-end delivery | Compose `up -d --build`, readiness probe loop, `go test -tags=e2e -run '^TestEndToEndDeliveryLifecycle$'` | Logs dumped on failure; stack removed afterwards |
 | Secret scan | `gitleaks/gitleaks-action` on full history | Requires no stored token |
 
-Publish (`publish.yml`) is separate from CI: it runs when `ci` succeeds on `main` (and directly for `v*`
-tags), builds `linux/amd64` API, worker, and receiver images, and pushes them to GHCR with an SBOM and
-provenance. A failed CI run therefore cannot publish images.
+Publish (`publish.yml`) is separate from CI: it runs when `ci` succeeds on `main`, and for a `v*` tag only
+after verifying that every required check on the tagged commit is `success` (it queries the check-runs API
+and fails otherwise). It builds `linux/amd64` API, worker, and receiver images and pushes them to GHCR with
+an SBOM and provenance. A failed CI run therefore cannot publish images, and a tag on an untested commit
+cannot publish either. The `latest` tag moves only on `main` builds.
 
 Execution: commit `a95cf07` on 2026-10-24 passed all six CI jobs in
 [run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780), and the three
