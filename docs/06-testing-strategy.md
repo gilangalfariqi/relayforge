@@ -255,6 +255,10 @@ skipped in the run summary and is never reported as passed.
 Publish (`publish.yml`) is separate from CI: on `main` and `v*` tags it builds `linux/amd64` API, worker,
 and receiver images and pushes them to GHCR with an SBOM and provenance.
 
+First execution: commit `a95cf07` on 2026-10-24 passed all six CI jobs in
+[run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780), and the three
+publish jobs in [run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807).
+
 Not in CI, and therefore **not run** there: a standalone OpenAPI schema validator (the route/operation
 anti-drift test `TestOpenAPIMatchesRouter` does run in the Go job), Trivy image scanning, `cargo audit`,
 fuzzing beyond the unit budget, `SIGKILL` crash drill, and the k6 load run. Those remain local/manual

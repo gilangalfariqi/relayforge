@@ -1,5 +1,7 @@
 # RelayForge
 
+[![ci](https://github.com/gilangalfariqi/relayforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gilangalfariqi/relayforge/actions/workflows/ci.yml)
+
 Reliable, multi-tenant webhook and event delivery.
 
 RelayForge accepts business events over an authenticated API, persists them durably, and atomically fans
@@ -7,10 +9,11 @@ each event out into per-endpoint delivery rows. The Rust delivery worker signs e
 HMAC-SHA256, retries transient failures with bounded exponential backoff, records every attempt, and supports
 authorised replay.
 
-> **Status: Phases 1–7 implemented and locally verified.** Delivery engine, SSRF enforcement, rate limits,
-> retention, replay, admin API, fuzz/crash drills and a reduced-scale benchmark run exist, with executed
-> evidence in the phase reports ([12](docs/12-phase-1-report.md)–[18](docs/18-phase-7-report.md)). Remaining
-> limits (indicative-only benchmarks, CI checks narrower than the local evidence, no release tag) are in
+> **Status: Phases 1–7 implemented and locally verified; CI and image publishing green.** Delivery engine,
+> SSRF enforcement, rate limits, retention, replay, admin API, fuzz/crash drills and a reduced-scale
+> benchmark run exist, with executed evidence in the phase reports
+> ([12](docs/12-phase-1-report.md)–[18](docs/18-phase-7-report.md)). Remaining limits (indicative-only
+> benchmarks, CI checks narrower than the local evidence, no release tag) are in
 > [docs/11-known-limitations.md](docs/11-known-limitations.md). Phase boundaries:
 > [docs/08-implementation-plan.md](docs/08-implementation-plan.md).
 
@@ -152,8 +155,13 @@ intend to delete the local database volume.
 - `.github/dependabot.yml` opens grouped weekly updates for Go, Cargo, GitHub Actions, Dockerfiles, and
   Compose images.
 
-The workflows are in the repository. Run results are reported on the repository's Actions tab; this
-document does not claim a green run before one exists.
+The workflows are in the repository. The first run — commit
+[`a95cf07`](https://github.com/gilangalfariqi/relayforge/commit/a95cf077fae8d3e95b360bdc7ac78df55cdcebf7) on
+2026-10-24 — passed every job: [ci run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780)
+(Go, Rust, PostgreSQL integration, image builds, live Compose E2E, gitleaks) and
+[publish run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807) (api,
+worker, receiver images at `ghcr.io/gilangalfariqi/relayforge/{api,worker,receiver}`). Each later push is
+reported on the Actions tab; a green badge is evidence for that commit, not a permanent guarantee.
 
 ## Documentation map
 

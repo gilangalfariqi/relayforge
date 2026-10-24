@@ -1,6 +1,7 @@
 # Phase 7 report — Portfolio release
 
-Date: 2026-10-23. Status: **demo and documentation complete; CI/commit gaps remain and are stated.**
+Date: 2026-10-23. Status: demo and documentation complete. The CI, commit, security-policy, and curl gaps
+recorded below were closed on 2026-10-24; see the addendum at the end.
 
 ## Changes
 
@@ -57,3 +58,31 @@ results (govulncheck 0, gitleaks 0, Trivy 0 HIGH/CRITICAL); they were **not re-r
 2. Run CI on GitHub and pin `govulncheck`.
 3. SECURITY.md and a curl collection.
 4. Full-scale benchmark repetitions (10 min × 3, retention disabled, k6, S4/S5).
+
+
+## Addendum 2026-10-24 - repository, CI, and release state
+
+The gaps listed above were closed after this report was written.
+
+- **First commit and remote.** `a95cf077fae8d3e95b360bdc7ac78df55cdcebf7` on `main`, pushed to
+  <https://github.com/gilangalfariqi/relayforge> (public, no history rewritten).
+- **CI green.** [ci run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780)
+  passed every job: Go control plane (gofmt, vet, build, staticcheck v0.8.2, `go test -race`, govulncheck
+  v1.9.0), Rust worker (fmt, clippy, tests), PostgreSQL and integration (migrations up/down/up, Go
+  integration, Rust `delivery_integration`), Container images (Compose config plus api/receiver/worker
+  builds), End-to-end delivery (live Compose lifecycle), and Secret scan (gitleaks over full history).
+- **Publish green.** [publish run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807)
+  pushed `linux/amd64` images for `api`, `worker`, and `receiver` to
+  `ghcr.io/gilangalfariqi/relayforge/`, with SBOM and provenance.
+- **Pinning.** Third-party actions are pinned by commit SHA; `govulncheck` and `staticcheck` are pinned by
+  version. The Dockerfiles expose explicit `api`, `receiver`, and `worker` targets so each published image
+  has the correct entrypoint.
+- **Policy and examples.** [SECURITY.md](../SECURITY.md) adds private vulnerability reporting and scope.
+  [19-curl-examples.md](19-curl-examples.md) collects the public and internal operations; it is derived
+  from the contract and the E2E flows, not a recorded transcript.
+- **Dependency updates.** Dependabot watches Go, Cargo, Actions, Dockerfiles, and Compose on a weekly
+  grouped schedule.
+
+Remaining gaps are unchanged: full-scale benchmarks (10-minute runs, k6, S4/S5), branch protection rules,
+and replaying the curl collection end to end. GHCR package visibility follows the repository settings and
+was not verified from an unauthenticated client.

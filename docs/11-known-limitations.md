@@ -43,7 +43,8 @@ These are product and engineering limits, not bugs to be silently "fixed" in imp
 
 - Benchmarks ran for 10–20 s windows, once per scenario, on a 4-core laptop with every component co-located.
   They are **indicative** and cannot support an SLO claim. No commit SHA or image digest was recorded for
-  that run.
+  that run: it predates the first commit (`a95cf07`, 2026-10-24), so a SHA cannot be assigned
+  retroactively.
 - S4, S5 were not run; the k6 script was not executed; retention was not disabled during latency runs.
 - Higher worker concurrency (32) cut burst drain from 21.4 s to 2.3 s but raised burst ingest p99 to 1.33 s on
   the test host; it was rejected, not tuned further.
@@ -54,6 +55,8 @@ These are product and engineering limits, not bugs to be silently "fixed" in imp
 - The GitHub Actions workflow covers the jobs listed in [06-testing-strategy.md](06-testing-strategy.md) §8.
   Checks outside that list (standalone OpenAPI schema validation, image scanning, `cargo audit`, the
   `SIGKILL` drill, and the k6 load run) were executed locally only; their evidence is in the phase reports.
+- CI and publish passed once, on commit `a95cf07` (2026-10-24). One green run demonstrates that the
+  pipeline works for that tree; it does not prove the absence of flaky tests or future breakage.
 - Rust was built and tested in a pinned container, not with a native Windows toolchain.
 - No coverage number is claimed.
 - No multi-AZ, replication, or failover behaviour was measured.

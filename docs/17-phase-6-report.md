@@ -145,3 +145,11 @@ the 3-repetition runs this report does not have.
 - `bench/preload.sql`, `bench/explain.sql`, `bench/optimizations.sql`, `bench/k6_ingest.js` (not executed)
 - `api/cmd/bench/main.go`; `make bench-preload bench-explain bench-run`
 - `bench/results/baseline.json`, `bench/results/optimized-worker.json`, `bench/results/explain-baseline.txt`
+
+## Addendum 2026-10-24 - commit provenance
+
+These benchmark runs executed before the repository's first commit, so no commit SHA or image digest can be
+attached to them retroactively. The first commit is
+`a95cf077fae8d3e95b360bdc7ac78df55cdcebf7` (2026-10-24); it contains the same benchmark harness and the
+recorded results under `bench/results/`. The numbers remain indicative and were not re-run against the
+published images.
