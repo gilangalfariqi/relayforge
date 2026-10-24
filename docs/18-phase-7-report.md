@@ -80,11 +80,13 @@ The gaps listed above were closed after this report was written.
   version. The Dockerfiles expose explicit `api`, `receiver`, and `worker` targets so each published image
   has the correct entrypoint.
 - **Policy and examples.** [SECURITY.md](../SECURITY.md) adds private vulnerability reporting and scope.
-  [19-curl-examples.md](19-curl-examples.md) collects the public and internal operations; it is derived
-  from the contract and the E2E flows, not a recorded transcript.
+  [19-curl-examples.md](19-curl-examples.md) collects the public and internal operations and was replayed
+  end to end against the Compose stack on 2026-10-24: all nine sections passed. The replay corrected two
+  documentation errors (the missing-`Idempotency-Key` status is `400`, not `422`; the problem `type` base is
+  `relayforge.example/errors/`, not `relayforge.dev/problems/`).
 - **Dependency updates.** Dependabot watches Go, Cargo, Actions, Dockerfiles, and Compose on a weekly
   grouped schedule.
 
-Remaining gaps are unchanged: full-scale benchmarks (10-minute runs, k6, S4/S5), branch protection rules,
-and replaying the curl collection end to end. GHCR package visibility follows the repository settings and
-was not verified from an unauthenticated client.
+Remaining gaps are unchanged: full-scale benchmarks (10-minute runs, k6, S4/S5) and branch protection
+rules. GHCR package visibility follows the repository settings and was not verified from an unauthenticated
+client.

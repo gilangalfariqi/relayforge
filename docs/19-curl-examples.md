@@ -2,8 +2,10 @@
 
 These examples follow the OpenAPI contract and the exercised flows in
 [docs/14-phase-3-report.md](14-phase-3-report.md) and [docs/18-phase-7-report.md](18-phase-7-report.md).
-The E2E suite executes the same operations programmatically; this page has not been replayed end-to-end as
-written, so treat individual responses as illustrative rather than recorded transcripts.
+The collection was replayed end-to-end against the Compose stack on 2026-10-24: all nine sections passed,
+including idempotent replay, the 503 outage to dead-letter to replay cycle, credential rotation, tenant
+suspension, and the `application/problem+json` error shape. The response bodies below are illustrative
+shapes from that run, with identifiers shortened.
 
 The examples use the local API at `http://127.0.0.1:8080`. The Compose stack runs with open signup and
 deliberately low-entropy development secrets. **Do not use this configuration on an untrusted network.**
@@ -253,19 +255,30 @@ curl -sS -X POST "$RF_ADMIN/internal/v1/admin/tenants/$RF_TENANT_ID/resume" | rf
 
 ## 9. Error shape
 
-Errors are RFC 9457-style `application/problem+json`:
+Errors are RFC 9457-style `application/problem+json`. This is the real body returned for an ingest request
+that carries a valid key but omits the required `type` field:
 
 ```json
 {
-  "type": "https://relayforge.dev/problems/validation_failed",
-  "title": "validation_failed",
+  "type": "https://relayforge.example/errors/validation-failed",
+  "title": "Validation failed",
   "status": 422,
-  "detail": "field 'type' is required",
+  "detail": "One or more fields are invalid.",
   "code": "validation_failed",
-  "request_id": "0199...",
-  "instance": "/api/v1/events"
+  "request_id": "97ca792557377922d51d248895eda791",
+  "errors": [
+    {
+      "pointer": "/type",
+      "code": "format",
+      "detail": "type must match ^[a-z][a-z0-9_]*(\\.[a-z0-9_]+){1,3}$"
+    }
+  ]
 }
 ```
+
+`type` is derived from `code` (`_` becomes `-`). Validation failures add an `errors` array of field
+pointers; other problems omit it. A missing `Idempotency-Key` is rejected earlier with `400` and
+`code: "idempotency_key_required"`.
 
 Always check the HTTP status before parsing a success body. The `request_id` is safe to share when
 reporting a problem; it is also present in structured logs.
