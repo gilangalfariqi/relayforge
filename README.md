@@ -149,9 +149,9 @@ intend to delete the local database volume.
 - `.github/workflows/ci.yml` runs Go formatting, vet, staticcheck, race tests, govulncheck, Rust
   fmt/clippy/tests, migration up/down/up, PostgreSQL-backed Go and Rust integration tests, image builds, a
   live Compose end-to-end delivery test, and a full-history gitleaks scan.
-- `.github/workflows/publish.yml` publishes `linux/amd64` API, worker, and receiver images to GHCR on
-  `main` and on `v*` tags. Tags include the branch or semantic version, `sha-<commit>`, and `latest` on
-  `main`. Builds attach SBOM and provenance attestations.
+- `.github/workflows/publish.yml` publishes `linux/amd64` API, worker, and receiver images to GHCR after the
+  `ci` workflow succeeds on `main`, and directly from `v*` tags. Tags include the branch or semantic
+  version, `sha-<commit>`, and `latest` on `main`. Builds attach SBOM and provenance attestations.
 - `.github/dependabot.yml` opens grouped weekly updates for Go, Cargo, GitHub Actions, Dockerfiles, and
   Compose images.
 

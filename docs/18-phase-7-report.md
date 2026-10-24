@@ -73,7 +73,9 @@ The gaps listed above were closed after this report was written.
   builds), End-to-end delivery (live Compose lifecycle), and Secret scan (gitleaks over full history).
 - **Publish green.** [publish run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807)
   pushed `linux/amd64` images for `api`, `worker`, and `receiver` to
-  `ghcr.io/gilangalfariqi/relayforge/`, with SBOM and provenance.
+  `ghcr.io/gilangalfariqi/relayforge/`, with SBOM and provenance. The workflow now runs from
+  `workflow_run` after a successful `ci` on `main`, so a failed CI run cannot publish; `v*` tags still
+  publish directly and must be cut from a green `main` commit.
 - **Pinning.** Third-party actions are pinned by commit SHA; `govulncheck` and `staticcheck` are pinned by
   version. The Dockerfiles expose explicit `api`, `receiver`, and `worker` targets so each published image
   has the correct entrypoint.
