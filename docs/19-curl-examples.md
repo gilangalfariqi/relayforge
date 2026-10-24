@@ -116,9 +116,6 @@ curl -sS "$RF_API/events/$RF_EVENT_ID" \
 curl -sS "$RF_API/deliveries?status=dead_lettered&limit=25" \
   -H "Authorization: Bearer $RF_KEY" | rfjson
 
-curl -sS "$RF_API/deliveries/$RF_DELIVERY_ID/attempts" \
-  -H "Authorization: Bearer $RF_KEY" | rfjson
-
 curl -sS "$RF_API/audit-logs?limit=25" \
   -H "Authorization: Bearer $RF_KEY" | rfjson
 ```
@@ -126,12 +123,15 @@ curl -sS "$RF_API/audit-logs?limit=25" \
 List responses are keyset paginated. Pass the opaque `next_cursor` from one response as `cursor` on the
 next request; do not construct cursors by hand. Unknown query parameters are rejected with `400`.
 
-To set `RF_DELIVERY_ID`, read the event detail and take `deliveries[0].id`, or:
+To inspect attempts, set `RF_DELIVERY_ID` from the event detail (`deliveries[0].id`):
 
 ```bash
 export RF_DELIVERY_ID="$(curl -sS "$RF_API/events/$RF_EVENT_ID" \
   -H "Authorization: Bearer $RF_KEY" \
   | python -c 'import json,sys; print(json.load(sys.stdin)["deliveries"][0]["id"])')"
+
+curl -sS "$RF_API/deliveries/$RF_DELIVERY_ID/attempts" \
+  -H "Authorization: Bearer $RF_KEY" | rfjson
 ```
 
 ## 6. Force a failure, inspect it, and replay
@@ -144,13 +144,14 @@ curl -sS -X POST http://127.0.0.1:8090/control/behavior \
   -H 'Content-Type: application/json' \
   -d '{"status":503}'
 
-# Ingest a second event; it will enter retry_scheduled and then dead_lettered.
+# Ingest a second event and keep its id; it enters retry_scheduled, then dead_lettered.
 export RF_FAILED_IDEMPOTENCY_KEY="curl-failure-$(date +%s)"
-curl -sS -X POST "$RF_API/events" \
+export RF_FAILED_EVENT_ID="$(curl -sS -X POST "$RF_API/events" \
   -H "Authorization: Bearer $RF_KEY" \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $RF_FAILED_IDEMPOTENCY_KEY" \
-  -d '{"type":"order.created","data":{"order_id":"ord_curl_failure"}}'
+  -d '{"type":"order.created","data":{"order_id":"ord_curl_failure"}}' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
 # Restore success before replay.
 curl -sS -X POST http://127.0.0.1:8090/control/behavior \
@@ -158,10 +159,11 @@ curl -sS -X POST http://127.0.0.1:8090/control/behavior \
   -d '{"status":200}'
 ```
 
-Wait until the delivery is terminal, then replay only eligible `failed` or `dead_lettered` rows:
+Wait until the delivery is terminal (`GET /events/$RF_FAILED_EVENT_ID` shows `failed`), then replay only
+eligible `failed` or `dead_lettered` rows:
 
 ```bash
-curl -sS -X POST "$RF_API/events/$RF_EVENT_ID/replay" \
+curl -sS -X POST "$RF_API/events/$RF_FAILED_EVENT_ID/replay" \
   -H "Authorization: Bearer $RF_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"reason":"receiver recovered after 503 outage"}' | rfjson
