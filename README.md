@@ -154,14 +154,22 @@ intend to delete the local database volume.
   version, `sha-<commit>`, and `latest` on `main`. Builds attach SBOM and provenance attestations.
 - `.github/dependabot.yml` opens grouped weekly updates for Go, Cargo, GitHub Actions, Dockerfiles, and
   Compose images.
+- `main` is protected: force pushes and deletions are blocked, and the six CI jobs (`Go control plane`,
+  `Rust worker`, `PostgreSQL and integration`, `Container images`, `End-to-end delivery`, `Secret scan`) are
+  required status checks. Direct pushes stay allowed, so a red run must be fixed forward and never
+  force-pushed away.
 
-The workflows are in the repository. The first run — commit
-[`a95cf07`](https://github.com/gilangalfariqi/relayforge/commit/a95cf077fae8d3e95b360bdc7ac78df55cdcebf7) on
-2026-10-24 — passed every job: [ci run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780)
-(Go, Rust, PostgreSQL integration, image builds, live Compose E2E, gitleaks) and
-[publish run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807) (api,
-worker, receiver images at `ghcr.io/gilangalfariqi/relayforge/{api,worker,receiver}`). Each later push is
-reported on the Actions tab; a green badge is evidence for that commit, not a permanent guarantee.
+The workflows are in the repository and have run green repeatedly; the latest verified state is
+[commit `b589434`](https://github.com/gilangalfariqi/relayforge/commit/b589434f77856404b206b4083f1706b6da2a778f)
+with [ci run 40082063336](https://github.com/gilangalfariqi/relayforge/actions/runs/40082063336) (Go, Rust,
+PostgreSQL integration, image builds, live Compose E2E, gitleaks) and
+[publish run 40082639334](https://github.com/gilangalfariqi/relayforge/actions/runs/40082639334) (api,
+worker, receiver images at `ghcr.io/gilangalfariqi/relayforge/{api,worker,receiver}`). The first run —
+commit [`a95cf07`](https://github.com/gilangalfariqi/relayforge/commit/a95cf077fae8d3e95b360bdc7ac78df55cdcebf7)
+— passed the same suite in [ci run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780)
+and [publish run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807). A
+green badge is evidence for its commit, not a permanent guarantee; GHCR package visibility was not verified
+from an unauthenticated client.
 
 ## Documentation map
 

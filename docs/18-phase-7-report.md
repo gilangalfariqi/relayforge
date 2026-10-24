@@ -86,7 +86,14 @@ The gaps listed above were closed after this report was written.
   `relayforge.example/errors/`, not `relayforge.dev/problems/`).
 - **Dependency updates.** Dependabot watches Go, Cargo, Actions, Dockerfiles, and Compose on a weekly
   grouped schedule.
+- **Repository hardening.** `main` is protected through the branches API: force pushes and deletions are
+  blocked and the six CI jobs are required status checks. Pull requests are not required, so direct pushes
+  to `main` keep working. Dependabot vulnerability alerts and private vulnerability reporting are enabled,
+  and the repository has topics and a description.
+- **Verification after the docs fix.** [ci run 40082063336](https://github.com/gilangalfariqi/relayforge/actions/runs/40082063336)
+  passed on commit `b589434f77856404b206b4083f1706b6da2a778f`, and the gated
+  [publish run 40082639334](https://github.com/gilangalfariqi/relayforge/actions/runs/40082639334)
+  republished all three images.
 
-Remaining gaps are unchanged: full-scale benchmarks (10-minute runs, k6, S4/S5) and branch protection
-rules. GHCR package visibility follows the repository settings and was not verified from an unauthenticated
-client.
+Remaining gaps are unchanged: full-scale benchmarks (10-minute runs, k6, S4/S5). GHCR package visibility
+follows the repository settings and was not verified from an unauthenticated client.

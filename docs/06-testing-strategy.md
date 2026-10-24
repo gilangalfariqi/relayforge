@@ -256,9 +256,14 @@ Publish (`publish.yml`) is separate from CI: it runs when `ci` succeeds on `main
 tags), builds `linux/amd64` API, worker, and receiver images, and pushes them to GHCR with an SBOM and
 provenance. A failed CI run therefore cannot publish images.
 
-First execution: commit `a95cf07` on 2026-10-24 passed all six CI jobs in
+Execution: commit `a95cf07` on 2026-10-24 passed all six CI jobs in
 [run 40077250780](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250780), and the three
 publish jobs in [run 40077250807](https://github.com/gilangalfariqi/relayforge/actions/runs/40077250807).
+Every `main` push has stayed green since; the latest verified commit is `b589434` with
+[ci 40082063336](https://github.com/gilangalfariqi/relayforge/actions/runs/40082063336) and
+[publish 40082639334](https://github.com/gilangalfariqi/relayforge/actions/runs/40082639334). Branch
+protection on `main` requires these six job names, blocks force pushes and deletions, and does not require
+a pull request.
 
 Not in CI, and therefore **not run** there: a standalone OpenAPI schema validator (the route/operation
 anti-drift test `TestOpenAPIMatchesRouter` does run in the Go job), Trivy image scanning, `cargo audit`,

@@ -1,6 +1,6 @@
 # Known limitations (v1)
 
-Status: Phases 1–7 complete. Last updated: 2026-10-23.
+Status: Phases 1–7 complete. Last updated: 2026-10-24.
 These are product and engineering limits, not bugs to be silently "fixed" in implementation.
 
 ## Delivery semantics
@@ -55,8 +55,12 @@ These are product and engineering limits, not bugs to be silently "fixed" in imp
 - The GitHub Actions workflow covers the jobs listed in [06-testing-strategy.md](06-testing-strategy.md) §8.
   Checks outside that list (standalone OpenAPI schema validation, image scanning, `cargo audit`, the
   `SIGKILL` drill, and the k6 load run) were executed locally only; their evidence is in the phase reports.
-- CI and publish passed once, on commit `a95cf07` (2026-10-24). One green run demonstrates that the
-  pipeline works for that tree; it does not prove the absence of flaky tests or future breakage.
+- CI and publish have passed on every push to `main` so far — five consecutive green runs from `a95cf07`
+  through `b589434` (the latest is
+  [ci 40082063336](https://github.com/gilangalfariqi/relayforge/actions/runs/40082063336) and
+  [publish 40082639334](https://github.com/gilangalfariqi/relayforge/actions/runs/40082639334)). Five green
+  runs still do not prove the absence of flaky tests or future breakage, and the required-check list is not
+  a substitute for reviewing what each job actually runs.
 - Rust was built and tested in a pinned container, not with a native Windows toolchain.
 - No coverage number is claimed.
 - No multi-AZ, replication, or failover behaviour was measured.
